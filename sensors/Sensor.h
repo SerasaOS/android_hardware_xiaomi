@@ -17,12 +17,8 @@
 #pragma once
 
 #include <android/hardware/sensors/2.1/types.h>
-#include <fcntl.h>
-#include <poll.h>
-#include <unistd.h>
 
 #include <condition_variable>
-#include <fstream>
 #include <memory>
 #include <mutex>
 #include <thread>
@@ -53,16 +49,16 @@ class Sensor {
     virtual ~Sensor();
 
     const SensorInfo& getSensorInfo() const;
-    virtual void batch(int32_t samplingPeriodNs);
+    void batch(int32_t samplingPeriodNs);
     virtual void activate(bool enable);
-    virtual Result flush();
+    Result flush();
 
-    virtual void setOperationMode(OperationMode mode);
+    void setOperationMode(OperationMode mode);
     bool supportsDataInjection() const;
     Result injectEvent(const Event& event);
 
   protected:
-    virtual void run();
+    void run();
     virtual std::vector<Event> readEvents();
     static void startThread(Sensor* sensor);
 
@@ -81,83 +77,6 @@ class Sensor {
     ISensorsEventCallback* mCallback;
 
     OperationMode mMode;
-};
-
-class OneShotSensor : public Sensor {
-  public:
-    OneShotSensor(int32_t sensorHandle, ISensorsEventCallback* callback);
-
-    virtual void batch(int32_t /* samplingPeriodNs */) override {}
-
-    virtual Result flush() override { return Result::BAD_VALUE; }
-};
-
-class SysfsPollingOneShotSensor : public OneShotSensor {
-  public:
-    SysfsPollingOneShotSensor(int32_t sensorHandle, ISensorsEventCallback* callback,
-                              const std::string& pollPath, const std::string& enablePath,
-                              const std::string& name, const std::string& typeAsString,
-                              SensorType type);
-    virtual ~SysfsPollingOneShotSensor() override;
-
-    virtual void activate(bool enable) override;
-    virtual void activate(bool enable, bool notify, bool lock);
-    virtual void writeEnable(bool enable);
-    virtual void setOperationMode(OperationMode mode) override;
-    virtual std::vector<Event> readEvents() override;
-    virtual void fillEventData(Event& event);
-    virtual bool readFd(const int fd);
-
-  protected:
-    virtual void run() override;
-
-    std::ofstream mEnableStream;
-
-  private:
-    void interruptPoll();
-
-    struct pollfd mPolls[2];
-    int mWaitPipeFd[2];
-    int mPollFd;
-};
-
-class UdfpsSensor : public SysfsPollingOneShotSensor {
-  public:
-    UdfpsSensor(int32_t sensorHandle, ISensorsEventCallback* callback)
-        : SysfsPollingOneShotSensor(
-                  sensorHandle, callback, "/sys/class/touch/touch_dev/fod_press_status",
-                  "/sys/class/touch/touch_dev/fod_longpress_gesture_enabled", "UDFPS Sensor",
-                  "org.lineageos.sensor.udfps",
-                  static_cast<SensorType>(static_cast<int32_t>(SensorType::DEVICE_PRIVATE_BASE) +
-                                          1)) {}
-    virtual void fillEventData(Event& event);
-    virtual bool readFd(const int fd);
-
-  private:
-    int mScreenX;
-    int mScreenY;
-};
-
-class SingleTapSensor : public SysfsPollingOneShotSensor {
-  public:
-    SingleTapSensor(int32_t sensorHandle, ISensorsEventCallback* callback)
-        : SysfsPollingOneShotSensor(
-                  sensorHandle, callback, "/sys/class/touch/touch_dev/gesture_single_tap_state",
-                  "/sys/class/touch/touch_dev/gesture_single_tap_enabled", "Single Tap Sensor",
-                  "org.lineageos.sensor.single_tap",
-                  static_cast<SensorType>(static_cast<int32_t>(SensorType::DEVICE_PRIVATE_BASE) +
-                                          2)) {}
-};
-
-class DoubleTapSensor : public SysfsPollingOneShotSensor {
-  public:
-    DoubleTapSensor(int32_t sensorHandle, ISensorsEventCallback* callback)
-        : SysfsPollingOneShotSensor(
-                  sensorHandle, callback, "/sys/class/touch/touch_dev/gesture_double_tap_state",
-                  "/sys/class/touch/touch_dev/gesture_double_tap_enabled", "Double Tap Sensor",
-                  "org.lineageos.sensor.double_tap",
-                  static_cast<SensorType>(static_cast<int32_t>(SensorType::DEVICE_PRIVATE_BASE) +
-                                          3)) {}
 };
 
 }  // namespace implementation
